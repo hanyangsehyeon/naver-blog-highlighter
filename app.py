@@ -3,7 +3,7 @@ import json
 import streamlit as st
 import streamlit.components.v1 as components
 
-from formatter.claude_client import transform_text
+from formatter.claude_client import transform_text_and_hashtags
 from formatter.hwpx_reader import read_hwpx_bytes
 
 st.set_page_config(page_title="네이버 블로그 서식 변환기", layout="wide")
@@ -35,7 +35,9 @@ with col_left:
     if st.button("변환하기", type="primary", disabled=not bool(raw_text), use_container_width=True):
         with st.spinner("Claude AI가 서식을 적용하는 중..."):
             try:
-                st.session_state["result_html"] = transform_text(raw_text)
+                html, hashtags = transform_text_and_hashtags(raw_text)
+                st.session_state["result_html"] = html
+                st.session_state["result_hashtags"] = hashtags
             except Exception as e:
                 st.error(f"변환 실패: {e}")
 
@@ -123,3 +125,64 @@ with col_right:
             """,
             unsafe_allow_html=True,
         )
+
+# ── Hashtags ───────────────────────────────────────────────────────────────────
+FIXED_HASHTAGS = "#우듬지루미북 #검단독서논술 #이음초 #이음초논술 #검단논술 #검단논술학원 #검단글쓰기 #검단그림책수업 #검단문해력 #검단교과연계 #검단우듬지논술 #중등논술 #독서논술 #초등논술 #논술학원추천 #글쓰기지도 #초등글쓰기 #독서논술 #글쓰기교육"
+
+st.divider()
+st.subheader("해시태그")
+
+col_tag1, col_tag2 = st.columns(2, gap="large")
+
+with col_tag1:
+    st.caption("고정 해시태그")
+    st.markdown(
+        f'<div style="border:1.5px solid #e0e0e0;border-radius:10px;padding:14px 18px;background:#fafafa;font-size:14px;line-height:2">{FIXED_HASHTAGS}</div>',
+        unsafe_allow_html=True,
+    )
+
+with col_tag2:
+    st.caption("글 내용 기반 해시태그")
+    if "result_hashtags" in st.session_state:
+        tags = st.session_state["result_hashtags"]
+        st.markdown(
+            f'<div style="border:1.5px solid #e0e0e0;border-radius:10px;padding:14px 18px;background:#fafafa;font-size:14px;line-height:2">{tags}</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div style="border:1.5px dashed #d0d0d0;border-radius:10px;padding:14px 18px;background:#fafafa;font-size:14px;color:#aaa;min-height:56px">변환 후 자동 생성됩니다</div>',
+            unsafe_allow_html=True,
+        )
+
+if "result_hashtags" in st.session_state:
+    combined = FIXED_HASHTAGS + " " + st.session_state["result_hashtags"]
+    combined_js = json.dumps(combined)
+    components.html(
+        f"""
+        <style>
+          button {{
+            padding: 8px 16px;
+            background: #03c75a;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+          }}
+          button:hover {{ background: #02a84a; }}
+          #msg {{ margin-left: 10px; color: #03c75a; font-size: 13px; display: none; }}
+        </style>
+        <button onclick="copyAll()">📋 해시태그 전체 복사</button>
+        <span id="msg">✅ 복사됨!</span>
+        <script>
+          async function copyAll() {{
+            await navigator.clipboard.writeText({combined_js});
+            const msg = document.getElementById('msg');
+            msg.style.display = 'inline';
+            setTimeout(() => msg.style.display = 'none', 2000);
+          }}
+        </script>
+        """,
+        height=45,
+    )

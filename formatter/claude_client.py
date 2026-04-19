@@ -1,4 +1,5 @@
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import anthropic
 from dotenv import load_dotenv
@@ -14,7 +15,6 @@ except Exception:
     pass
 
 _client = None
-_system_prompt = None
 
 SYSTEM_PROMPT = """
 너는 블로그 글에 서식을 적용하는 에디터야.
@@ -65,8 +65,17 @@ def _get_client() -> anthropic.Anthropic:
     return _client
 
 
+HASHTAG_PROMPT = """아래 블로그 글을 읽고, 글의 주제와 내용에 맞는 네이버 블로그 해시태그를 10~15개 생성해줘.
+한국어 해시태그만 사용하고, #태그 형식으로 공백으로 구분해서 한 줄로만 출력해. 다른 텍스트는 출력하지 마."""
+
+
+_MOCK_HTML = "<div><span style=\"background-color:#ffe3c8;font-weight:bold\">mock 변환 결과</span>입니다. API 호출 없이 테스트 중입니다.</div>"
+_MOCK_TAGS = "#테스트태그 #모크모드 #개발중"
+
+
 def transform_text(raw_text: str) -> str:
-    """Send raw text to Claude API, return formatted HTML string."""
+    if os.getenv("MOCK_MODE") == "true":
+        return _MOCK_HTML
     response = _get_client().messages.create(
         model="claude-sonnet-4-6",
         max_tokens=8192,
@@ -80,3 +89,22 @@ def transform_text(raw_text: str) -> str:
         messages=[{"role": "user", "content": raw_text}],
     )
     return response.content[0].text.strip()
+
+
+def generate_hashtags(raw_text: str) -> str:
+    if os.getenv("MOCK_MODE") == "true":
+        return _MOCK_TAGS
+    response = _get_client().messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=256,
+        messages=[{"role": "user", "content": f"{HASHTAG_PROMPT}\n\n{raw_text}"}],
+    )
+    return response.content[0].text.strip()
+
+
+def transform_text_and_hashtags(raw_text: str) -> tuple[str, str]:
+    """Run text transformation and hashtag generation in parallel."""
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_html = executor.submit(transform_text, raw_text)
+        future_tags = executor.submit(generate_hashtags, raw_text)
+    return future_html.result(), future_tags.result()
