@@ -1,7 +1,17 @@
+import os
+
 import anthropic
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Streamlit Cloud secrets override
+try:
+    import streamlit as st
+    if "ANTHROPIC_API_KEY" in st.secrets:
+        os.environ["ANTHROPIC_API_KEY"] = st.secrets["ANTHROPIC_API_KEY"]
+except Exception:
+    pass
 
 _client = None
 _system_prompt = None
